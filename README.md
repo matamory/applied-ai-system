@@ -128,14 +128,20 @@ Tokens are created by the generate_access_token function in the auth_utils.py mo
 ### Example 2: RAG mode (Mode 3)
 **Input**
 ```text
-Which endpoint lists all users?
+What does the /api/projects/<project_id> route return?
 ```
 
-**Output (representative)**
+**Output**
 ```text
-The endpoint is GET /api/users. It returns a list of all users and requires
-an Authorization token. (Source: API_REFERENCE.md)
+[API_REFERENCE.md]
+### GET /api/projects/<project_id>
+
+---
+[API_REFERENCE.md]
+This document lists the main API endpoints available in the sample application.
 ```
+
+*Note: RAG mode returns the retrieved snippets grounded in documentation. These are the evidence chunks used to answer the question.*
 
 ### Example 3: Guardrail refusal
 **Input**
@@ -160,6 +166,61 @@ I do not know based on these docs.
 - CLI-first design is reproducible and simple, but less user-friendly than a web UI.
 
 ## Testing Summary
+### End-to-end verification run (3 inputs)
+
+Case 1: Retrieval-only behavior
+- Input: `What environment variables are required for authentication?`
+- Mode: Retrieval only
+- Output:
+```text
+[AUTH.md]
+This document explains how authentication works in the sample application. It covers token generation, required environment variables, and the expected client workflow.
+
+---
+[AUTH.md]
+## Environment Variables
+
+---
+[AUTH.md]
+The authentication system depends on two variables:
+
+- AUTH_SECRET_KEY
+  A secret string used to sign all access tokens. Must be long and unpredictable.
+
+- TOKEN_LIFETIME_SECONDS
+  Controls how long a generated token remains valid. Defaults to 3600 seconds if not set.
+```
+
+Case 2: AI feature behavior (RAG)
+- Input: `What does the /api/projects/<project_id> route return?`
+- Mode: RAG
+- Output:
+```text
+[API_REFERENCE.md]
+### GET /api/projects/<project_id>
+
+---
+[API_REFERENCE.md]
+This document lists the main API endpoints available in the sample application. It describes each route's purpose, required parameters, and expected responses.
+
+---
+[API_REFERENCE.md]
+### GET /api/projects
+```
+
+*RAG mode retrieves and displays the relevant documentation snippets as the answer source.*
+
+Case 3: Reliability / guardrail behavior
+- Input: `How does payment processing work in this system?`
+- Mode: Validated External RAG + Guardrail
+- Output:
+```text
+I cannot confidently validate this answer against the retrieved docs. Please rephrase your question or ask for a narrower topic.
+Validation: score=0.00, method=heuristic, blocked=True
+```
+
+This demonstrates: end-to-end execution, AI mode behavior, and explicit guardrail refusal with confidence metadata.
+
 ### What worked
 - Retrieval evaluation runs end-to-end and reports measurable quality.
 - Current measured retrieval hit rate: **0.88** on `SAMPLE_QUERIES`.
