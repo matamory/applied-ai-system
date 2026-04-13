@@ -2,29 +2,59 @@
 
 from __future__ import annotations
 
+import re
+
 
 class AnswerValidator:
     """Scores answer groundedness and applies a configurable pass threshold."""
+
+    STOPWORDS = {
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from",
+        "how", "in", "is", "it", "of", "on", "or", "that", "the", "to",
+        "was", "what", "when", "where", "which", "who", "why", "with",
+        "this", "these", "those", "there", "their", "then", "than", "also",
+        "system", "application", "example",
+    }
 
     def __init__(self, llm_client, min_score=0.65):
         self.llm_client = llm_client
         self.min_score = min_score
 
-    def _heuristic_groundedness(self, query, answer, snippets):
-        query_tokens = set(query.lower().split())
-        snippet_text = " ".join(text.lower() for _, text in snippets)
-        answer_tokens = set(answer.lower().split())
+    def _tokenize(self, text):
+        return re.findall(r"\b\w+\b", (text or "").lower())
 
-        if not answer_tokens:
+    def _query_keywords(self, query):
+        return [
+            token
+            for token in self._tokenize(query)
+            if len(token) > 2 and token not in self.STOPWORDS
+        ]
+
+    def _heuristic_groundedness(self, query, answer, snippets):
+        query_keywords = set(self._query_keywords(query))
+        snippet_text = " ".join(text.lower() for _, text in snippets)
+        snippet_tokens = set(self._tokenize(snippet_text))
+        answer_tokens = set(self._tokenize(answer))
+
+        if not answer_tokens or not query_keywords:
+            return 0.0
+
+        # First gate: snippets must cover enough query meaning.
+        matched_query_keywords = query_keywords.intersection(snippet_tokens)
+        matched_count = len(matched_query_keywords)
+        required = 1 if len(query_keywords) == 1 else 2
+        if matched_count < required:
             return 0.0
 
         # Heuristic fallback: overlap between answer and available evidence/query.
-        evidence_hits = sum(1 for token in answer_tokens if token in snippet_text)
-        query_hits = sum(1 for token in answer_tokens if token in query_tokens)
+        evidence_hits = sum(1 for token in answer_tokens if token in snippet_tokens)
+        query_hits = sum(1 for token in answer_tokens if token in query_keywords)
 
         evidence_ratio = evidence_hits / len(answer_tokens)
         query_ratio = query_hits / len(answer_tokens)
-        return max(0.0, min(1.0, 0.85 * evidence_ratio + 0.15 * query_ratio))
+        coverage_ratio = matched_count / len(query_keywords)
+        score = 0.60 * evidence_ratio + 0.25 * query_ratio + 0.15 * coverage_ratio
+        return max(0.0, min(1.0, score))
 
     def validate(self, query, answer, snippets):
         """

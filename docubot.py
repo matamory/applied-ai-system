@@ -255,7 +255,16 @@ class DocuBot:
         if not self.has_meaningful_evidence(query, snippets):
             return "I do not know based on these docs."
 
-        return self.llm_client.answer_from_snippets(query, snippets)
+        try:
+            llm_answer = self.llm_client.answer_from_snippets(query, snippets)
+        except Exception:
+            return self.answer_retrieval_only(query, top_k=top_k)
+
+        if llm_answer.strip().lower() == "i do not know based on the docs i have.":
+            # If retrieval has evidence but the model is conservative, return snippets.
+            return self.answer_retrieval_only(query, top_k=top_k)
+
+        return llm_answer
 
     def answer_rag_validated(self, query, validator, top_k=3):
         """
@@ -294,6 +303,10 @@ class DocuBot:
             raw_answer = self.llm_client.answer_from_snippets(query, snippets)
         except Exception:
             raw_answer = self.answer_retrieval_only(query, top_k=top_k)
+
+        if raw_answer.strip().lower() == "i do not know based on the docs i have.":
+            raw_answer = self.answer_retrieval_only(query, top_k=top_k)
+
         validation = validator.validate(query, raw_answer, snippets)
 
         if not validation.get("is_grounded", False):
