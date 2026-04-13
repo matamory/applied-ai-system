@@ -23,21 +23,7 @@ No agent framework, no extra service layer, and no database changes were added.
 ## Architecture Overview
 The system routes each user question through one of three modes. In the strongest mode (RAG), DocuBot retrieves evidence snippets from docs, then asks the LLM to answer using only those snippets.
 
-```mermaid
-flowchart LR
-    U["User / CLI Input"] --> M["Mode Router: Naive, Retrieval, RAG"]
-
-    M --> R["Retriever: Local docs index"]
-    R --> C["Context Builder: Top-k snippets"]
-    C --> G["LLM Generator: Answer draft"]
-    G --> V["Guardrail Check: Evidence overlap"]
-
-    V -- pass --> O["Final answer"]
-    V -- fail --> F["Refusal: I do not know based on these docs"]
-
-    R --> E["Evaluator/Tester: retrieval hit rate"]
-    E --> H["Human review and iteration"]
-```
+![System Architecture Diagram](assets/MermaidDiagram.png)
 
 ### Data flow in plain language
 1. **Input**: A user asks a documentation question in CLI.
@@ -220,6 +206,10 @@ Validation: score=0.00, method=heuristic, blocked=True
 ```
 
 This demonstrates: end-to-end execution, AI mode behavior, and explicit guardrail refusal with confidence metadata.
+
+## Demo Video
+A complete walkthrough of DocuBot in action:
+- [Demo.mov](assets/Demo.mov) — End-to-end demo showing all three modes and guardrail behavior
 
 ### What worked
 - Retrieval evaluation runs end-to-end and reports measurable quality.
