@@ -1,111 +1,79 @@
 # Setup Guide
 
-This document explains how to install, configure, and run the sample application. Follow these steps to prepare your environment, set required variables, and verify that everything is working correctly.
+This guide is for running DocuBot and the extension features (External RAG + validation) with minimal setup.
 
 ## Requirements
+- Python 3.9+
+- `pip`
+- Gemini API key for LLM features
 
-- Python 3.9 or later  
-- pip installed  
-- A terminal or command prompt  
-- Optional: a valid Gemini API key for LLM based features
+## 1. Install dependencies
+From the project root:
 
-## 1. Install Dependencies
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-From the project root, install dependencies using pip:
+## 2. Configure environment variables
+Create your env file:
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+```bash
+cp .env.example .env
+```
 
-This installs all required libraries, including the database driver and LLM client.
+Set at least:
 
-## 2. Environment Variables
+```bash
+GEMINI_API_KEY=your_api_key_here
+```
 
-Create a `.env` file or export the following variables directly in your shell.
+Optional extension settings:
 
-### Required Variables
+```bash
+EXTERNAL_DOC_URLS=https://example.com/docs,https://example.com/api
+VALIDATION_MIN_SCORE=0.65
+DOCUBOT_LOG_PATH=logs/external_rag_runs.jsonl
+```
 
-- `DATABASE_URL`  
-  Specifies where the application stores data. If omitted, the app uses a local SQLite database file.
+Recommended starter set for better evidence coverage in validated mode:
 
-  Example:
+```bash
+EXTERNAL_DOC_URLS=https://raw.githubusercontent.com/tiangolo/fastapi/master/docs/en/docs/tutorial/security/oauth2-jwt.md,https://raw.githubusercontent.com/tiangolo/fastapi/master/docs/en/docs/tutorial/sql-databases.md,https://raw.githubusercontent.com/tiangolo/fastapi/master/docs/en/docs/tutorial/path-params.md
+```
 
-      ```plaintext
-      DATABASE_URL=sqlite:///app.db
-      ```
+## 3. Run DocuBot
 
-- `AUTH_SECRET_KEY`  
-Used to sign authentication tokens. Must be a non empty string.
+```bash
+python main.py
+```
 
-    Example:
+Mode summary:
+- `1` Naive LLM over full docs
+- `2` Retrieval only
+- `3` RAG
+- `4` External RAG + hard validation
 
-        ```plaintext
-        AUTH_SECRET_KEY="supersecretvalue"
-        ```
+## 4. Run evaluations
+Baseline retrieval:
 
-### Optional Variables
+```bash
+python evaluation.py
+```
 
-- `TOKEN_LIFETIME_SECONDS`  
-Controls how long access tokens remain valid.
+Validated extension evaluation:
 
-- `GEMINI_API_KEY`  
-Enables LLM powered features such as enhanced documentation answers. Without this key, the application falls back to rule based behavior.
+```bash
+python evaluation.py --validated-external-rag
+```
 
-## 3. Initialize the Database
+This prints:
+- groundedness pass rate
+- per-query validation method/score
+- block reason summary
 
-If using SQLite, the database file will be created automatically when the server runs. For PostgreSQL, ensure the database exists before starting the application:
-
-    ```plaintext
-    createdb appdb
-    ```
-
-You may also need to run migrations if schema changes are introduced.
-
-## 4. Running the Application
-
-To start the server:
-
-    ```plaintext
-    python app.py
-    ```
-
-By default, the server listens on:
-
-    ```plaintext
-    [http://localhost:5000](http://localhost:5000)
-    ```
-
-Once the server is running, you can test basic functionality by visiting the API endpoints or using a tool like curl or Postman.
-
-## 5. Using the Docs Assistant (DocuBot)
-
-If you have set `GEMINI_API_KEY`, you can run the documentation assistant:
-
-    ```plaintext
-    python main.py
-    ```
-
-This tool supports multiple modes including:
-
-- naive LLM generation  
-- retrieval only  
-- full RAG (retrieval plus generation)
-
-Each mode helps you explore different system behaviors.
-
-## 6. Troubleshooting
-
-- If authentication fails, confirm that `AUTH_SECRET_KEY` is set.  
-- If database queries return errors, verify the `DATABASE_URL` format.  
-- If LLM features do not work, ensure that `GEMINI_API_KEY` is defined in the environment.  
-- If installation fails, check that you are using a compatible Python version.
-
-## 7. Resetting the Environment
-
-To reset the local database (SQLite only):
-
-    ```plaintext
-    rm app.db
-    ```
-
-Then rerun the setup steps above.
+## 5. Troubleshooting
+- If mode 1/3/4 are unavailable, check `GEMINI_API_KEY`.
+- If mode 4 refuses too often, lower `VALIDATION_MIN_SCORE` slightly.
+- If external docs do not load, verify URL accessibility and check cached data in `.doc_cache/`.
