@@ -11,6 +11,8 @@ import os
 import glob
 import re
 
+from doc_fetcher import load_external_documents
+
 
 class DocuBot:
     STOPWORDS = {
@@ -19,13 +21,24 @@ class DocuBot:
         "was", "what", "when", "where", "which", "who", "why", "with",
     }
 
-    def __init__(self, docs_folder="docs", llm_client=None):
+    def __init__(
+        self,
+        docs_folder="docs",
+        llm_client=None,
+        remote_urls=None,
+        use_remote_cache=True,
+    ):
         """
         docs_folder: directory containing project documentation files
         llm_client: optional Gemini client for LLM based answers
+        remote_urls: optional list of external docs URLs
+        use_remote_cache: whether to read/write external docs cache
         """
         self.docs_folder = docs_folder
         self.llm_client = llm_client
+        self.remote_urls = remote_urls or []
+        self.use_remote_cache = use_remote_cache
+        self.external_fetch_failures = []
 
         # Load documents into memory
         self.documents = self.load_documents()  # List of (filename, text)
@@ -53,6 +66,14 @@ class DocuBot:
                     text = f.read()
                 filename = os.path.basename(path)
                 docs.append((filename, text))
+
+        external_docs, failures = load_external_documents(
+            self.remote_urls,
+            use_cache=self.use_remote_cache,
+        )
+        self.external_fetch_failures = failures
+        docs.extend(external_docs)
+
         return docs
 
     # -----------------------------------------------------------
