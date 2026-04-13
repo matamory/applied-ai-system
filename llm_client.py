@@ -12,7 +12,9 @@ Experiment with:
 - How strictly the model is instructed to use only the provided context
 """
 
+import json
 import os
+import re
 import google.generativeai as genai
 
 # Central place to update the model name if needed.
@@ -47,13 +49,32 @@ class GeminiClient:
     # -----------------------------------------------------------
 
     def naive_answer_over_full_docs(self, query, all_text):
-        # We ignore all_text and send a generic prompt instead
+        # Baseline mode: provide entire corpus so the model can answer directly.
         prompt = f"""
-    You are a documentation assistant. 
-    Answer this developer question: {query}
+You are a documentation assistant.
+
+Use only the documentation below to answer the question. If the docs do not
+contain the answer, reply exactly: "I do not know based on the docs I have."
+
+Documentation:
+{all_text}
+
+Developer question:
+{query}
     """
         response = self.model.generate_content(prompt)
         return (response.text or "").strip()
+
+    def _extract_json_object(self, text):
+        if not text:
+            return None
+        match = re.search(r"\{[\s\S]*\}", text)
+        if not match:
+            return None
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            return None
 
     # -----------------------------------------------------------
     # Phase 2: RAG style generation over retrieved snippets
@@ -109,3 +130,52 @@ Rules:
 
         response = self.model.generate_content(prompt)
         return (response.text or "").strip()
+
+    def validate_grounded_answer(self, query, answer, snippets):
+        """
+        Ask Gemini to judge whether an answer is grounded in the provided snippets.
+
+        Returns a dict with keys: score (0..1), is_grounded (bool), reason (str),
+        or None if parsing fails.
+        """
+        if not snippets:
+            return {
+                "score": 0.0,
+                "is_grounded": False,
+                "reason": "No snippets were provided to validate against.",
+            }
+
+        context_blocks = []
+        for filename, text in snippets:
+            context_blocks.append(f"File: {filename}\n{text}\n")
+
+        context = "\n\n".join(context_blocks)
+
+        prompt = f"""
+You are validating whether an AI answer is grounded in retrieved documentation.
+
+Question:
+{query}
+
+Retrieved snippets:
+{context}
+
+Answer to validate:
+{answer}
+
+Respond with JSON only, with this exact schema:
+{{
+  "score": <number between 0 and 1>,
+  "is_grounded": <true or false>,
+  "reason": "<short explanation>"
+}}
+
+Scoring guidance:
+- 1.0 means fully supported by snippets.
+- 0.0 means not supported or contradicted by snippets.
+- Mark is_grounded=false if the answer adds important claims not present in snippets.
+"""
+
+        response = self.model.generate_content(prompt)
+        raw = (response.text or "").strip()
+        return self._extract_json_object(raw)
