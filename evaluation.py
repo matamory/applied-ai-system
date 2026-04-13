@@ -10,7 +10,36 @@ The evaluation is intentionally simple: it checks whether DocuBot retrieves
 the correct files for each query and reports a hit rate.
 """
 
+import argparse
+import os
+from collections import Counter
+
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path=".env")
+
 from dataset import SAMPLE_QUERIES
+from answer_validator import AnswerValidator
+
+
+def parse_external_urls_from_env():
+    """Reads external documentation URLs from EXTERNAL_DOC_URLS."""
+    raw = os.getenv("EXTERNAL_DOC_URLS", "")
+    if not raw.strip():
+        return []
+
+    normalized = raw.replace("\n", ",")
+    return [part.strip() for part in normalized.split(",") if part.strip()]
+
+
+def parse_validation_min_score():
+    """Reads the validation threshold from VALIDATION_MIN_SCORE."""
+    raw = os.getenv("VALIDATION_MIN_SCORE", "0.65").strip()
+    try:
+        score = float(raw)
+    except ValueError:
+        score = 0.65
+    return max(0.0, min(1.0, score))
 
 
 # -----------------------------------------------------------
@@ -149,15 +178,68 @@ def print_groundedness_results(pass_rate, results):
         print()
 
 
+def print_block_reason_summary(results):
+    """Prints an aggregate summary of block reasons."""
+    reasons = Counter(item["block_reason"] or "allowed" for item in results)
+    print("Block Reason Summary")
+    print("--------------------")
+    for reason, count in sorted(reasons.items(), key=lambda item: (-item[1], item[0])):
+        print(f"{reason}: {count}")
+    print()
+
+
+def evaluate_validated_external_rag(top_k=3):
+    """
+    Runs validated External RAG over SAMPLE_QUERIES and reports groundedness.
+    If EXTERNAL_DOC_URLS is unset, this still runs against local docs only.
+    """
+    from docubot import DocuBot
+
+    try:
+        from llm_client import GeminiClient
+    except Exception:
+        GeminiClient = None
+
+    external_urls = parse_external_urls_from_env()
+    if not external_urls:
+        print("No EXTERNAL_DOC_URLS configured; running validated evaluation on local docs only.\n")
+
+    llm_client = None
+    if GeminiClient is not None:
+        try:
+            llm_client = GeminiClient()
+        except RuntimeError as exc:
+            print(f"Warning: Gemini client unavailable: {exc}")
+
+    bot = DocuBot(llm_client=llm_client, remote_urls=external_urls)
+    validator = AnswerValidator(llm_client=llm_client, min_score=parse_validation_min_score())
+
+    pass_rate, results = evaluate_groundedness(bot, validator, queries=SAMPLE_QUERIES, top_k=top_k)
+    print_groundedness_results(pass_rate, results)
+    print_block_reason_summary(results)
+
+
 # -----------------------------------------------------------
 # Optional CLI entry point
 # -----------------------------------------------------------
 
 if __name__ == "__main__":
-    from docubot import DocuBot
+    parser = argparse.ArgumentParser(description="Evaluate DocuBot retrieval or validated External RAG.")
+    parser.add_argument(
+        "--validated-external-rag",
+        action="store_true",
+        help="Run groundedness evaluation for the validated External RAG pipeline.",
+    )
+    args = parser.parse_args()
 
-    print("Running retrieval evaluation...\n")
-    bot = DocuBot()
+    if args.validated_external_rag:
+        print("Running validated External RAG evaluation...\n")
+        evaluate_validated_external_rag()
+    else:
+        from docubot import DocuBot
 
-    hit_rate, results = evaluate_retrieval(bot)
-    print_eval_results(hit_rate, results)
+        print("Running retrieval evaluation...\n")
+        bot = DocuBot()
+
+        hit_rate, results = evaluate_retrieval(bot)
+        print_eval_results(hit_rate, results)

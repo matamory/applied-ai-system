@@ -290,7 +290,10 @@ class DocuBot:
                 },
             }
 
-        raw_answer = self.llm_client.answer_from_snippets(query, snippets)
+        try:
+            raw_answer = self.llm_client.answer_from_snippets(query, snippets)
+        except Exception:
+            raw_answer = self.answer_retrieval_only(query, top_k=top_k)
         validation = validator.validate(query, raw_answer, snippets)
 
         if not validation.get("is_grounded", False):

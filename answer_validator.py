@@ -38,7 +38,10 @@ class AnswerValidator:
         """
         llm_result = None
         if self.llm_client is not None:
-            llm_result = self.llm_client.validate_grounded_answer(query, answer, snippets)
+            try:
+                llm_result = self.llm_client.validate_grounded_answer(query, answer, snippets)
+            except Exception:
+                llm_result = None
 
         if llm_result is not None:
             score = float(llm_result.get("score", 0.0))
