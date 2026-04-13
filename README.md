@@ -208,9 +208,8 @@ Validation: score=0.00, method=heuristic, blocked=True
 This demonstrates: end-to-end execution, AI mode behavior, and explicit guardrail refusal with confidence metadata.
 
 ## Demo Video
-A complete walkthrough of extended DocuBot in action:
-- [Demo.gif](assets/Demo.gif) 
-— End-to-end demo showing all three modes and guardrail behavior
+
+![DocuBot Demo - End-to-end walkthrough showing all modes and guardrail behavior](assets/Demo.gif)
 
 ### What worked
 - Retrieval evaluation runs end-to-end and reports measurable quality.
