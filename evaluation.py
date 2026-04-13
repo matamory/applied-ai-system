@@ -84,6 +84,36 @@ def evaluate_retrieval(bot, top_k=3):
     return hit_rate, results
 
 
+def evaluate_groundedness(bot, validator, queries=None, top_k=3):
+    """
+    Runs validated RAG on queries and reports groundedness pass rate.
+
+    Returns: (pass_rate, detailed_results)
+    """
+    queries = queries or SAMPLE_QUERIES
+    results = []
+    passes = 0
+
+    for query in queries:
+        outcome = bot.answer_rag_validated(query, validator=validator, top_k=top_k)
+        passed = not outcome["blocked"]
+        if passed:
+            passes += 1
+
+        results.append(
+            {
+                "query": query,
+                "passed": passed,
+                "score": outcome["validation"]["score"],
+                "method": outcome["validation"]["method"],
+                "block_reason": outcome["block_reason"],
+            }
+        )
+
+    pass_rate = passes / len(queries) if queries else 0.0
+    return pass_rate, results
+
+
 # -----------------------------------------------------------
 # Pretty printing
 # -----------------------------------------------------------
@@ -101,6 +131,21 @@ def print_eval_results(hit_rate, results):
         print(f"  Expected:  {item['expected']}")
         print(f"  Retrieved: {item['retrieved']}")
         print(f"  Hit:       {item['hit']}")
+        print()
+
+
+def print_groundedness_results(pass_rate, results):
+    """Nicely formats groundedness evaluation results."""
+    print("\nGroundedness Evaluation")
+    print("-----------------------")
+    print(f"Pass rate: {pass_rate:.2f}\n")
+
+    for item in results:
+        print(f"Query: {item['query']}")
+        print(f"  Passed:      {item['passed']}")
+        print(f"  Score:       {item['score']:.2f}")
+        print(f"  Method:      {item['method']}")
+        print(f"  Block reason:{item['block_reason']}")
         print()
 
 
