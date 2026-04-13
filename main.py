@@ -16,6 +16,8 @@ load_dotenv()
 from docubot import DocuBot
 from llm_client import GeminiClient
 from dataset import SAMPLE_QUERIES
+from answer_validator import AnswerValidator
+from run_logger import RunLogger
 
 
 def try_create_llm_client():
@@ -151,6 +153,19 @@ def parse_external_urls_from_env():
     return urls
 
 
+def parse_validation_min_score():
+    raw = os.getenv("VALIDATION_MIN_SCORE", "0.65").strip()
+    try:
+        score = float(raw)
+    except ValueError:
+        score = 0.65
+    return max(0.0, min(1.0, score))
+
+
+def parse_log_path():
+    return os.getenv("DOCUBOT_LOG_PATH", "logs/external_rag_runs.jsonl").strip()
+
+
 def run_external_rag_mode(llm_client, has_llm):
     """
     Mode 4:
@@ -168,6 +183,8 @@ def run_external_rag_mode(llm_client, has_llm):
         return
 
     bot = DocuBot(llm_client=llm_client, remote_urls=external_urls)
+    validator = AnswerValidator(llm_client=llm_client, min_score=parse_validation_min_score())
+    logger = RunLogger(log_path=parse_log_path(), enabled=True)
 
     if bot.external_fetch_failures:
         print("\nWarning: Some external docs could not be fetched and had no cache fallback:")
@@ -181,9 +198,29 @@ def run_external_rag_mode(llm_client, has_llm):
     for query in queries:
         print("=" * 60)
         print(f"Question: {query}\n")
-        answer = bot.answer_rag(query)
+        outcome = bot.answer_rag_validated(query, validator=validator)
+        answer = outcome["final_answer"]
         print("Answer:")
         print(answer)
+        print(
+            f"Validation: score={outcome['validation']['score']:.2f}, "
+            f"method={outcome['validation']['method']}, blocked={outcome['blocked']}"
+        )
+
+        logger.log(
+            {
+                "mode": "external_rag_validated",
+                "query": query,
+                "remote_urls": external_urls,
+                "external_fetch_failures": bot.external_fetch_failures,
+                "retrieved_files": [filename for filename, _ in outcome["snippets"]],
+                "retrieved_count": len(outcome["snippets"]),
+                "validation": outcome["validation"],
+                "blocked": outcome["blocked"],
+                "block_reason": outcome["block_reason"],
+                "final_answer": outcome["final_answer"],
+            }
+        )
         print()
 
 
