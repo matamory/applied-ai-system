@@ -257,6 +257,66 @@ class DocuBot:
 
         return self.llm_client.answer_from_snippets(query, snippets)
 
+    def answer_rag_validated(self, query, validator, top_k=3):
+        """
+        RAG mode with hard validation guardrail.
+
+        Returns a structured dict with answer, snippets, validation metadata,
+        and final disposition.
+        """
+        if self.llm_client is None:
+            raise RuntimeError(
+                "Validated RAG mode requires an LLM client. Provide a GeminiClient instance."
+            )
+
+        snippets = self.retrieve(query, top_k=top_k)
+
+        if not self.has_meaningful_evidence(query, snippets):
+            return {
+                "query": query,
+                "snippets": snippets,
+                "raw_answer": None,
+                "final_answer": (
+                    "I could not find enough reliable evidence in the available docs. "
+                    "Please rephrase your question or narrow the scope."
+                ),
+                "blocked": True,
+                "block_reason": "insufficient_evidence",
+                "validation": {
+                    "score": 0.0,
+                    "is_grounded": False,
+                    "reason": "Insufficient retrieval evidence before generation.",
+                    "method": "rule",
+                },
+            }
+
+        raw_answer = self.llm_client.answer_from_snippets(query, snippets)
+        validation = validator.validate(query, raw_answer, snippets)
+
+        if not validation.get("is_grounded", False):
+            return {
+                "query": query,
+                "snippets": snippets,
+                "raw_answer": raw_answer,
+                "final_answer": (
+                    "I cannot confidently validate this answer against the retrieved docs. "
+                    "Please rephrase your question or ask for a narrower topic."
+                ),
+                "blocked": True,
+                "block_reason": "validation_failed",
+                "validation": validation,
+            }
+
+        return {
+            "query": query,
+            "snippets": snippets,
+            "raw_answer": raw_answer,
+            "final_answer": raw_answer,
+            "blocked": False,
+            "block_reason": None,
+            "validation": validation,
+        }
+
     # -----------------------------------------------------------
     # Bonus Helper: concatenated docs for naive generation mode
     # -----------------------------------------------------------
