@@ -5,7 +5,10 @@ Supports three modes:
 1. Naive LLM generation over all docs (Phase 0)
 2. Retrieval only (Phase 1)
 3. RAG: retrieval plus LLM generation (Phase 2)
+4. External RAG: include external docs URLs in retrieval pipeline
 """
+
+import os
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -45,6 +48,10 @@ def choose_mode(has_llm):
         print("  3) RAG (retrieval + LLM)")
     else:
         print("  3) RAG (unavailable, no GEMINI_API_KEY)")
+    if has_llm:
+        print("  4) External RAG (local docs + external URLs + LLM)")
+    else:
+        print("  4) External RAG (unavailable, no GEMINI_API_KEY)")
     print("  q) Quit")
 
     choice = input("Enter choice: ").strip().lower()
@@ -129,6 +136,57 @@ def run_rag_mode(bot, has_llm):
         print()
 
 
+def parse_external_urls_from_env():
+    """
+    Reads external documentation URLs from EXTERNAL_DOC_URLS.
+    Supports comma-separated or newline-separated values.
+    """
+    raw = os.getenv("EXTERNAL_DOC_URLS", "")
+    if not raw.strip():
+        return []
+
+    # Normalize commas/newlines into a single separator.
+    normalized = raw.replace("\n", ",")
+    urls = [part.strip() for part in normalized.split(",") if part.strip()]
+    return urls
+
+
+def run_external_rag_mode(llm_client, has_llm):
+    """
+    Mode 4:
+    RAG answers over local docs plus external docs fetched from URLs.
+    """
+    if not has_llm or llm_client is None:
+        print("\nExternal RAG mode is not available (no GEMINI_API_KEY).\n")
+        return
+
+    external_urls = parse_external_urls_from_env()
+    if not external_urls:
+        print("\nExternal RAG mode requires EXTERNAL_DOC_URLS in .env or shell.")
+        print("Example:")
+        print("EXTERNAL_DOC_URLS=https://example.com/docs,https://example.com/api\n")
+        return
+
+    bot = DocuBot(llm_client=llm_client, remote_urls=external_urls)
+
+    if bot.external_fetch_failures:
+        print("\nWarning: Some external docs could not be fetched and had no cache fallback:")
+        for url, reason in bot.external_fetch_failures:
+            print(f"  - {url} ({reason})")
+        print()
+
+    queries, label = get_query_or_use_samples()
+    print(f"\nRunning external RAG mode on {label}...\n")
+
+    for query in queries:
+        print("=" * 60)
+        print(f"Question: {query}\n")
+        answer = bot.answer_rag(query)
+        print("Answer:")
+        print(answer)
+        print()
+
+
 def main():
     print("DocuBot Tinker Activity")
     print("=======================\n")
@@ -148,8 +206,10 @@ def main():
             run_retrieval_only_mode(bot)
         elif choice == "3":
             run_rag_mode(bot, has_llm)
+        elif choice == "4":
+            run_external_rag_mode(llm_client, has_llm)
         else:
-            print("\nUnknown choice. Please pick 1, 2, 3, or q.\n")
+            print("\nUnknown choice. Please pick 1, 2, 3, 4, or q.\n")
 
 
 if __name__ == "__main__":
