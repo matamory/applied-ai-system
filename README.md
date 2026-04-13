@@ -199,7 +199,7 @@ This document lists the main API endpoints available in the sample application. 
 Case 3: Reliability / guardrail behavior
 - Input: `How does payment processing work in this system?`
 - Mode: Validated External RAG + Guardrail
-- Output:
+- Output: 
 ```text
 I cannot confidently validate this answer against the retrieved docs. Please rephrase your question or ask for a narrower topic.
 Validation: score=0.00, method=heuristic, blocked=True
@@ -208,8 +208,9 @@ Validation: score=0.00, method=heuristic, blocked=True
 This demonstrates: end-to-end execution, AI mode behavior, and explicit guardrail refusal with confidence metadata.
 
 ## Demo Video
-A complete walkthrough of DocuBot in action:
-- [Demo.mov](assets/Demo.mov) — End-to-end demo showing all three modes and guardrail behavior
+A complete walkthrough of extended DocuBot in action:
+- [Demo.gif](assets/Demo.gif) 
+— End-to-end demo showing all three modes and guardrail behavior
 
 ### What worked
 - Retrieval evaluation runs end-to-end and reports measurable quality.
